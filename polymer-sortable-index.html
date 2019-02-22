@@ -1,0 +1,86 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="./polymer-sortable.html">
+
+<dom-module id="polymer-sortable-index">
+  <script>
+    (function() {
+
+    /**
+     * ## PolymerSortableIndex
+     *
+     * `<polymer-sortable-index>` Allow use of html5-sortable on dom-repeat with sortable function
+     *
+     * @memberof PolymerEl
+     * @customElement
+     * @polymer
+     * @demo
+     **/
+    class PolymerSortableIndex extends PolymerEl.PolymerSortable {
+
+      static get is() { 
+        return 'polymer-sortable-index'; 
+      }
+
+      static get properties() {
+        return {
+          /*
+           * `indexPath` the path to index
+           */
+           indexPath: {
+             type: String,
+             value: 'index'
+             },
+        };
+      }
+
+      swapItem(repeater, index, oldindex, model) {
+        const items = repeater.items.concat();
+        // console.log(items, 'index: ', index, 'old: ', oldindex, model);
+        this._translateItems(items, index, oldindex);
+        Polymer.Path.set(model, this.indexPath, index);
+
+        // items[index].index = oldindex;
+        repeater.items = [];
+        Polymer.RenderStatus.afterNextRender(this, () => {
+         repeater.items = items;
+        });
+      }
+
+      addItem(repeater, index, oldindex, model, event) {
+        super.addItem(...arguments);
+        this._translateItems(repeater.items, index, Infinity);
+      }
+
+      removeItem(repeater, index, oldindex, model, event, copy) {
+        super.removeItem(...arguments);
+        if (!copy) {
+          this._translateItems(repeater.items, Infinity, oldindex);
+        }
+      }
+
+      _translateItems(items, index, oldindex) {
+        items.forEach(item => {
+          const itemIndex = Polymer.Path.get(item, this.indexPath) * 1;
+          if (itemIndex >= index && itemIndex < oldindex) {
+            Polymer.Path.set(item, this.indexPath, itemIndex + 1);
+          } else if (itemIndex <= index && itemIndex > oldindex) {
+            Polymer.Path.set(item, this.indexPath, itemIndex - 1);
+          }
+        });
+      }
+    }
+
+    customElements.define(PolymerSortableIndex.is, PolymerSortableIndex);
+
+    if (!window.PolymerEl) {
+      window.PolymerEl = {};
+    }
+   
+   /* 
+    * @namespace MultiChart
+    */
+    window.PolymerEl.PolymerSortableIndex = PolymerSortableIndex;
+
+    })();
+  </script>
+</dom-module>

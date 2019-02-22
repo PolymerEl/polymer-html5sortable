@@ -1,0 +1,105 @@
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="./polymer-sortable.html">
+
+<dom-module id="polymer-sortable-bound">
+  <script>
+    (function() {
+
+    /**
+     * ## PolymerSortableBound
+     *
+     * `<polymer-sortable-bound>` Allow use of html5-sortable on dom-repeat to be bound with external data store (e.g. firebase)
+     *
+     * @memberof PolymerEl
+     * @customElement
+     * @polymer
+     * @demo
+     **/
+    class PolymerSortableBound extends PolymerEl.PolymerSortable {
+
+      static get is() {
+        return 'polymer-sortable-bound';
+      }
+
+      static get properties() {
+        return {
+          /*
+           * `data` data bound to the list
+           */
+           data: {
+             type: Object,
+             notify: true
+           },
+
+           /*
+            * `keyPath` path to the key
+            */
+            keyPath: {
+              type: String,
+              value: 'key'
+              },
+
+            /*
+            * `indexPath` path to the index
+            */
+            indexPath: {
+              type: String,
+              value: 'index'
+              },
+        };
+      }
+
+      swapItem(repeater, index, oldindex, model) {
+        this.set(`data.${this.get(this.keyPath, model)}.${this.indexPath}`, index);
+        // const items = repeater.items.concat();
+        this._translateItems(this.data, index, oldindex);
+        // Polymer.Path.set(model, this.indexPath, index);
+
+        // items[index].index = oldindex;
+        // repeater.items = [];
+        // Polymer.RenderStatus.afterNextRender(this, () => {
+        //  repeater.items = items;
+        // });
+      }
+
+      addItem(repeater, index, oldindex, model, event) {
+        this.set(`data.${this.get(this.keyPath, model)}`, model);
+        super.addItem(...arguments);
+        this._translateItems(repeater.items, index, Infinity);
+      }
+
+      removeItem(repeater, index, oldindex, model, event, copy) {
+        this.set(`data.${this.get(this.keyPath, model)}`, null);
+        super.removeItem(...arguments);
+        if (!copy) {
+          this._translateItems(repeater.items, Infinity, oldindex);
+        }
+      }
+
+      _translateItems(data, index, oldindex) {
+        Object.keys(data).forEach(key => {
+          const item = data[key];
+          const itemIndex = Polymer.Path.get(item, this.indexPath) * 1;
+          if (itemIndex >= index && itemIndex < oldindex) {
+            this.set(`data.${key}.${this.indexPath}`, itemIndex + 1);
+          } else if (itemIndex <= index && itemIndex > oldindex) {
+            this.set(`data.${key}.${this.indexPath}`, itemIndex - 1);
+          }
+        });
+      }
+    }
+
+    customElements.define(PolymerSortableBound.is, PolymerSortableBound);
+
+    if (!window.PolymerEl) {
+      window.PolymerEl = {};
+    }
+
+   /*
+    * @namespace MultiChart
+    */
+    window.PolymerEl.PolymerSortableBound = PolymerSortableBound;
+
+    })();
+  </script>
+</dom-module>
