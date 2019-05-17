@@ -46,26 +46,70 @@
               type: String,
               value: 'index'
               },
+
+            getIndex: {
+              type: Function, 
+              computed: '_compteGetIndex(indexPath)'
+            },
+
+            /*
+             * `delegateAdd` when true, only rely on `sortable-add-item` event
+             * to delegate adding item to containers
+             */
+             delegateAdd: {
+               type: Boolean,
+               value: true
+            }
+        };
+      }
+      
+      _compteGetIndex(indexPath) {
+        return function(item) {
+          return Polymer.Path.get(item, indexPath) * 1;
         };
       }
 
-      swapItem(repeater, index, oldindex, model) {
-        this.set(`data.${this.get(this.keyPath, model)}.${this.indexPath}`, index);
-        // const items = repeater.items.concat();
+      swapItem(repeater, index, oldindex, model, event) {
+        this._resetRepeaterDom(repeater, index, oldindex);
         this._translateItems(this.data, index, oldindex);
-        // Polymer.Path.set(model, this.indexPath, index);
+        this.set(`data.${this.get(this.keyPath, model)}.${this.indexPath}`, index);
+        this._resetIndex();
+        // const items = repeater.items.concat();
+        this.dispatchEvent(new CustomEvent('sortable-item-swap', {detail: {
+          repeater: repeater,
+          origin: event.detail && event.detail.origin,
+          destination: event.detail && event.detail.destination,
+          model: model,
+          index: index,
+          oldindex: oldindex
+        }, bubbles: true, composed: true}));
+      }
 
-        // items[index].index = oldindex;
-        // repeater.items = [];
-        // Polymer.RenderStatus.afterNextRender(this, () => {
-        //  repeater.items = items;
-        // });
+      addToRepeater(repeater, index, oldindex, model, event, key) {
+          this.set(`data.${key}`, model);
+          super.addItem(...arguments);
+          this._translateItems(repeater.items, index, Infinity);
+          this._resetIndex();
       }
 
       addItem(repeater, index, oldindex, model, event) {
-        this.set(`data.${this.get(this.keyPath, model)}`, model);
-        super.addItem(...arguments);
-        this._translateItems(repeater.items, index, Infinity);
+        const key = this.get(this.keyPath, model);
+
+        // Note(cg): when dropping from another repeater adding item should happen
+        // while listeneing `sortable-item-add`.
+        if (key || (repeater != this && !this.delegateAdd)) {
+          this.addToRepeater(repeater, index, oldindex, model, event, key);
+        }
+
+        this.dispatchEvent(new CustomEvent('sortable-item-add', {detail: {
+          repeater: repeater,
+          delegateAdd: this.delegateAdd,
+          origin: event.detail && event.detail.origin,
+          destination: event.detail && event.detail.destination,
+          model: model,
+          index: index,
+          oldindex: oldindex
+        }, bubbles: true, composed: true}));
       }
 
       removeItem(repeater, index, oldindex, model, event, copy) {
@@ -73,19 +117,57 @@
         super.removeItem(...arguments);
         if (!copy) {
           this._translateItems(repeater.items, Infinity, oldindex);
+          this._resetIndex();
         }
+        this.dispatchEvent(new CustomEvent('sortable-item-remove', {detail: {
+          repeater: repeater,
+          origin: event.detail && event.detail.origin,
+          destination: event.detail && event.detail.destination,
+          model: model,
+          index: index,
+          oldindex: oldindex,
+          copy: copy
+        }, bubbles: true, composed: true}));
       }
 
       _translateItems(data, index, oldindex) {
         Object.keys(data).forEach(key => {
           const item = data[key];
-          const itemIndex = Polymer.Path.get(item, this.indexPath) * 1;
+          const itemIndex = this.getIndex(item); // Polymer.Path.get(item, this.indexPath) * 1;
           if (itemIndex >= index && itemIndex < oldindex) {
             this.set(`data.${key}.${this.indexPath}`, itemIndex + 1);
           } else if (itemIndex <= index && itemIndex > oldindex) {
             this.set(`data.${key}.${this.indexPath}`, itemIndex - 1);
           }
         });
+      }
+
+      _resetIndex() {
+        const data = this.data;
+        Object.keys(data).sort((ka, kb) => {
+          const indexa = this.getIndex(data[ka]);
+          const indexb = this.getIndex(data[kb]);
+          if(indexa > indexb) {
+            return 1;
+          }
+          if(indexa < indexb) {
+            return -1;
+          }
+          return 0;
+        }).forEach((key,index) => {
+          this.set(`data.${key}.${this.indexPath}`, index);
+        })
+      }
+
+      // Note(cg): we re-order dom nodes as they have been swapped during drop operation 
+      // and are not in sync with dom-repeat.__instances.
+      _resetRepeaterDom(repeater, index, oldindex) {
+        const parent = repeater.parentElement
+        const node = parent.children[index];
+        const targetIndex = index > oldindex ? oldindex : oldindex + 1
+        const target = parent.children[targetIndex]
+        parent.insertBefore(node,target);
+
       }
     }
 

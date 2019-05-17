@@ -1,0 +1,117 @@
+<script>
+(function() {
+
+  /**
+   * ## Placeholder
+   * 
+   * basic mixin managing dd placeholder
+   * 
+   * @memberof PolymerEl.mixin
+   * @polymer
+   * @mixinFunction
+   */
+  const Placeholder = Polymer.dedupingMixin(superClass => {
+
+    /*
+     * @polymer
+     * @mixinClass
+     */
+    class Mixin extends superClass {
+
+      static get properties() {
+        return {
+           /*
+           * `placeholder` the Element to use as sortable placeholde. E.g.: 
+           *     <div id="placeholder">
+           *      <div class="placeholder">[[placeholderContent]]</div>
+           *    </div>
+           */
+           placeholder: {
+             type: Object
+          },
+
+          /*
+           * `placeholderContent` content of placeholder
+           */
+          placeholderContent: {
+            type: String,
+            value: 'Drop here'
+          },
+
+          /*
+           * `disableDrag` a flag to prevent drag listeners to be addded
+           */
+           disableDrag: {
+             type: Boolean,
+           },
+
+        };
+      }
+
+      static get observers() {
+        return [];
+      }
+
+      connectedCallback() {
+        super.connectedCallback();
+        Polymer.RenderStatus.afterNextRender(this, () => {
+          if (!this.disableDrag === true) {
+            this.addEventListener('sort-start', this._onSortStart);
+            this.addEventListener('sort-enter', this._onSortEnter);
+            this.addEventListener('sort-update', this._onSortUpdate);
+            this.addEventListener('sort-stop', this._onSortStop);
+            const placeholder = this.shadowRoot.querySelector('#placeholder');
+            if (placeholder) {
+              this.placeholder = placeholder;
+            } else {
+              console.warn('placeholder mixin expects #placeholder');
+            }
+          }
+        });
+      }
+
+      // Note(cg): returns model of dragged item.
+      getDragModel(e) {
+
+        return e.detail && e.detail.origin && e.detail.origin.container
+          && e.detail.origin.container.draggedModel;
+        // return e.detail && e.detail.item && e.detail.item.item;
+      }
+
+      // Note(cg): override this to update placeholderContent.
+      _onSortStart(e) {
+        console.log('START', e.detail);
+        // this.placeholderContent = (e.detail && e.detail.item && e.detail.item.item && e.detail.item.item.label) || 'move question';
+      }
+
+      _onSortEnter(e) {
+        console.log('ENTER', e.detail);
+       }
+
+      _onSortStop(e) {
+        console.log('STOP', e.detail);
+       }
+
+      _onSortUpdate(e) {
+        console.log('UPDATE', e.detail);
+       }
+    }
+
+    return Mixin;
+  });
+
+  if (!window.PolymerEl) {
+    window.PolymerEl = {};
+  }
+  /* 
+   * @namespace MultiChart.mixin
+   */
+  window.PolymerEl.mixin = window.PolymerEl.mixin || {};
+  /* 
+   * @mixinClass
+   */
+  window.PolymerEl.mixin.Placeholder = Placeholder;
+
+})();
+
+</script>

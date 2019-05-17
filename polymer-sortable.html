@@ -1,5 +1,7 @@
 <link rel="import" href="../polymer/polymer.html">
 <link rel="import" href="polymer-html5sortable-script.html">
+<!-- <link rel="import" href="polymer-html5sortable-script-dev.html"> -->
+<link rel="import" href="placeholder-mixin.html">
 <!--
 
 # polymer-html5sortable
@@ -247,6 +249,29 @@ Showing the tree
             type: Boolean,
             value: false
           },
+
+          /*
+           * `name` allow to give a name to this sortable. It reflects to attributes 
+           * so as to be able to set `accept-from="[name=thisName]"`. Class attributes 
+           * is sometimes not reliable enough, eg. paper-list,
+           */
+          name: {
+            type: String,
+            reflectToAttribute: true
+          },
+
+          /*
+           * `draggedModel` the model associated with dragged element
+           */
+          draggedModel: {
+            type: Object
+          },
+          /*
+           * `draggedIndex` the index associated with dragged element
+           */
+          draggedIndex: {
+            type: Number
+          }
         };
       }
 
@@ -258,11 +283,18 @@ Showing the tree
           const repeater = this._getRepeater(this);
           repeater.mutableData = true;
           repeater.addEventListener('dom-change', () => {
+            this._debounceInit = Polymer.Debouncer.debounce(
+               this._debounceInit,
+               Polymer.Async.timeOut.after(100),
+               () => {
+                  this.init();
+                 });
+              
             // Reloading the sortable every time that dom-repeat changes
-            this.init();
           });
           this.addEventListener('sortstart', this._onSortstart);
           this.addEventListener('sortupdate', this._onSortupdate);
+          this.addEventListener('sortenter', this._onSortenter);
           this.addEventListener('sortstop', this._onSortstop);
           this.init();
         });
@@ -311,12 +343,36 @@ Showing the tree
           }
         }
       }
+
+      // Note(cg): we use this event to store model (dom-repeat item) hold by the dragged item.
       _onSortstart(event) {
         event.stopPropagation();
         if (this.parentClass) {
           this.parentElement.classList.add(this.parentClass);
         }
-        this.dispatchEvent(new CustomEvent('sort-start', { detail: event, bubbles: true, composed: true }));
+        const startparent = event.detail.origin && event.detail.origin.container,
+          startrepeater = this._getRepeater(startparent);
+
+        this.draggedModel = startrepeater.itemForElement(event.detail.originalTarget);
+        this.draggedIndex = startrepeater.indexForElement(event.detail.originalTarget);
+
+        // Note(cg): when we use a handle, originalTarget is the handle itself
+        // and not the initial dragged item
+        if (!this.draggedModel && event.detail.originalTarget.domHost) {
+          this.draggedModel = startrepeater.itemForElement(event.detail.originalTarget.domHost);
+          this.draggedIndex = startrepeater.indexForElement(event.detail.originalTarget.domHost);
+        }
+
+        this._dispatch('sort-start', event);
+
+      }
+
+      _onSortenter(event) {
+        event.stopPropagation();
+        // only if different container
+        if (event.detail.origin && event.detail.origin.container !== this) {
+          this._dispatch('sort-enter', event);
+        }
       }
 
       _onSortstop(event) {
@@ -324,11 +380,8 @@ Showing the tree
         if (this.parentClass) {
           this.parentElement.classList.remove(this.parentClass);
         }
-        this.dispatchEvent(new CustomEvent('sort-stop', {
-          detail: event,
-          bubbles: true,
-          composed: true
-        }));
+
+        this._dispatch('sort-stop', event);
       }
 
       /**
@@ -344,53 +397,56 @@ Showing the tree
           endparent = event.detail.destination && event.detail.destination.container,
           endrepeater = this._getRepeater(endparent);
 
-        const modelIndex = this._getModelAndIndex(startrepeater, item, event, startparent.copy);
-        const model = modelIndex.model;
-
-        // The index returned by the event, are not correct because it excludes those which are no selectable
-        const index = [].indexOf.call(endparent.children, item);
-        // const oldindex = startrepeater.indexForElement(item);
-        const oldindex = modelIndex.index;
-        console.info('model', modelIndex, index);
+        const index = this._getNewIndex(endparent, item, event);
+        // const modelIndex =  this._getModelAndIndex(startrepeater, item, event, startparent.copy);
+        // const oldindex = modelIndex.index;
+        
+        const model = startparent.draggedModel;
+        const oldindex = startparent.draggedIndex;
+        console.info('model', model, oldindex, index);
 
         // Note(cg): we need to remove item from endparent to avoid node duplication 
         // and messing up with indexses
-        if (item.parentElement === endparent) {
-          endparent.removeChild(item);
-        }
 
         if (endparent === this && startparent === this) {
           // Moving the element to this new index
           this.swapItem(endrepeater, startparent.copy ? index - 1 : index, oldindex, model, event);
         } else if (endparent === this) {
+          if (item.parentElement === endparent) {
+            endparent.removeChild(item);
+          }
           this.addItem(endrepeater, index, oldindex, model, event);
           this.removeItem(startrepeater, index, oldindex, model, event, startparent.copy);
         }
 
-        this.dispatchEvent(new CustomEvent('sort-update', {
-          detail: event,
-          bubbles: true,
-          composed: true
-        }));
+        this._dispatch('sort-update', event);
+        this.draggedModel = null;
+        this.draggedIndex = null;
+
       }
 
-      _getModelAndIndex(repeater, item, event, copy) {
-        if (copy) {
-          const items = repeater.items.concat();
-          if (repeater.__sortFn) {
-            items.sort((a, b) => repeater.__sortFn(items[a], items[b]));
-          }
-          const model = items[event.detail.origin.index];
-          return {
-            model: model,
-            index: items.indexOf(model)
-          };
-        }
-        return {
-          model: repeater.itemForElement(item),
-          index: repeater.indexForElement(item)
-        };
+      _getNewIndex(parent, item, event) {
+        // The index returned by the event, are not correct because it excludes those which are not selectable
+        return [].indexOf.call(parent.children, item);
       }
+
+      // _getModelAndIndex(repeater, item, event, copy) {
+      //   if (copy) {
+      //     const items = repeater.items.concat();
+      //     if (repeater.__sortFn) {
+      //       items.sort((a, b) => repeater.__sortFn(items[a], items[b]));
+      //     }
+      //     const model = items[event.detail.origin.index];
+      //     return {
+      //       model: model,
+      //       index: items.indexOf(model)
+      //     };
+      //   }
+      //   return {
+      //     model: repeater.itemForElement(item),
+      //     index: repeater.indexForElement(item)
+      //   };
+      // }
 
       swapItem(repeater, index, oldindex, model, event) {
         const items = repeater.items;
@@ -408,9 +464,10 @@ Showing the tree
       addItem(repeater, index, oldindex, model, event) {
         // Note(cg): we add one option for transforming model.
         model = this.transformModel(model, event);
-        if (this._checkDuplicate(repeater, model)) {
+        if (model && this._checkDuplicate(repeater, model)) {
           repeater.splice('items', Math.max(index, 0), 0, model);
         }
+        
       }
 
       // Note(cg): when startrepeater is `copy`, we can add multiple time the same item.
@@ -442,10 +499,15 @@ Showing the tree
 
       }
 
-      _getChildren(node) {
-        return [].filter.call(node.children, function(child) {
-          return child.localName !== 'dom-repeat';
-        });
+      _dispatch(name, event) {
+        this.dispatchEvent(new CustomEvent(name, {
+          detail: Object.assign({
+            draggedModel: this.draggedModel,
+            draggedIndex: this.draggedIndex
+          }, event.detail),
+          bubbles: true,
+          composed: true
+        }));
       }
 
       _getRepeater(node) {
