@@ -86,7 +86,11 @@
       }
 
       addToRepeater(repeater, index, oldindex, model, event, key) {
-          this.set(`data.${key}`, model);
+          if(!this.data) {
+            this.data = {[key]: model};
+          } else {
+            this.set(`data.${key}`, model);
+          }
           super.addItem(...arguments);
           this._translateItems(repeater.items, index, Infinity);
           this._resetIndex();
@@ -143,8 +147,8 @@
       }
 
       _resetIndex() {
-        const data = this.data;
-        Object.keys(data).sort((ka, kb) => {
+        const data = this.data || {};
+        Object.keys(data ).sort((ka, kb) => {
           const indexa = this.getIndex(data[ka]);
           const indexb = this.getIndex(data[kb]);
           if(indexa > indexb) {

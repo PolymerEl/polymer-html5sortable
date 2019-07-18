@@ -148,7 +148,7 @@ Showing the tree
     <style>
     :host {
       display: block;
-      min-height: 48px;
+      min-height: 32px;
     }
     </style>
     <slot></slot>
@@ -196,7 +196,7 @@ Showing the tree
            *
            */
           acceptFrom: {
-            type: String,
+            type: String
           },
 
           /*
@@ -241,6 +241,20 @@ Showing the tree
               };
             }
           },
+
+          /*
+           * `getSortable` allow to instantiate sortable on more than 
+           * one parent element. For instance it can be used in the context
+           * of paper-sublist where sub items should also be sortable
+           */
+           getSortable: {
+             type: Function,
+             value: function() {
+                return function(polymerSortable) {
+                  return polymerSortable;
+                };
+             }
+             },
 
           /*
            * `avoidDuplicate` true to avoid same model to be adde multiple time under the same list
@@ -317,14 +331,15 @@ Showing the tree
           }
         });
 
-        // Adding custom children selector function
-        config.getChildren = function(element) {
-          return element.children.filter(child => {
-            return child.localName !== 'dom-repeat';
-          });
-        };
-
-        this.sortable = sortable(this, config);
+        let sortables = this.getSortable(this);
+                // if the user provided an element, return it in an array to keep the return value consistant
+        if (sortables instanceof HTMLElement) {
+            sortables = [sortables];
+        }
+        sortables = Array.prototype.slice.call(sortables);
+        // Note(cg): we store this polymer-sortable for each sortable parent. 
+        sortables.forEach(s => s.__sortable = this);
+        this.sortable = sortable(sortables, config);
       }
 
       destroy() {
@@ -363,6 +378,11 @@ Showing the tree
           this.draggedIndex = startrepeater.indexForElement(event.detail.originalTarget.domHost);
         }
 
+        // Note(cg): we pass this as event.detail.origin. This is usefull for instance when we have to 
+        // fetch draggedModel 
+        if(event.detail.origin) {
+          event.detail.origin.sortable = this;
+        }
         this._dispatch('sort-start', event);
 
       }
@@ -416,7 +436,7 @@ Showing the tree
             endparent.removeChild(item);
           }
           this.addItem(endrepeater, index, oldindex, model, event);
-          this.removeItem(startrepeater, index, oldindex, model, event, startparent.copy);
+          this.removeItem(startrepeater, index, oldindex, model, event, startparent.copy || (startparent.__sortable && startparent.__sortable.copy));
         }
 
         this._dispatch('sort-update', event);
@@ -465,6 +485,13 @@ Showing the tree
         // Note(cg): we add one option for transforming model.
         model = this.transformModel(model, event);
         if (model && this._checkDuplicate(repeater, model)) {
+          // Note(cg): we add the first item.
+          if (!repeater.items) {
+            model.index = 0;
+            repeater.items = [model];
+            // repeater.set('items', [model]);
+            return;
+          }
           repeater.splice('items', Math.max(index, 0), 0, model);
         }
         
@@ -473,7 +500,7 @@ Showing the tree
       // Note(cg): when startrepeater is `copy`, we can add multiple time the same item.
       // This method allows to avoid that
       _checkDuplicate(repeater, model) {
-        if (this.avoidDuplicate) {
+        if (this.avoidDuplicate && repeater.items) {
           return repeater.items.indexOf(model) < 0;
         }
         return true;
@@ -511,9 +538,10 @@ Showing the tree
       }
 
       _getRepeater(node) {
-        return [].filter.call(node.children, child => {
-          return child.localName === 'dom-repeat';
-        })[0];
+        return [...node.children].find(el => el.localName === 'dom-repeat');
+        // return [].find.call(node.children, child => {
+        //   return child.localName === 'dom-repeat';
+        // });
       }
     }
 
