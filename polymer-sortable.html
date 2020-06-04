@@ -223,6 +223,13 @@ Showing the tree
             type: String
           },
 
+          /*
+           * `parentClasscontainerClass` class applied to container when drag hover
+           */
+          containerClass: {
+            type: String
+          },
+
           /** User disabled option to prevent an a list to be reordered or modified.*/
           disabled: {
             type: Boolean,
@@ -323,7 +330,7 @@ Showing the tree
         const config = {};
 
         // Adding config
-        ['items', 'handle', 'forcePlaceholderSize', 'acceptFrom', 'copy', 'placeholder', 'hoverClass', 'placeholderClass', 'draggingClass', 'parentClass']
+        ['items', 'handle', 'forcePlaceholderSize', 'acceptFrom', 'copy', 'placeholder', 'hoverClass', 'placeholderClass', 'draggingClass', 'containerClass', 'parentClass']
         .forEach(key => {
           const value = this.get(key);
           if (value !== undefined) {

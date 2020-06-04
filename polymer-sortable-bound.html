@@ -86,6 +86,7 @@
       }
 
       addToRepeater(repeater, index, oldindex, model, event, key) {
+          delete(model[this.keyPath]); 
           if(!this.data) {
             this.data = {[key]: model};
           } else {

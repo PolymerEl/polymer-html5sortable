@@ -5,11 +5,13 @@
   <title>polymer-html5sortable demo</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1, user-scalable=yes">
-  <script src="../../webcomponentsjs/webcomponents-lite.js"></script>
+  <!-- <script src="../../webcomponentsjs/webcomponents-lite.js"></script> -->
+  <script src="../../webcomponentsjs/webcomponents-loader.js"></script>
   <link rel="import" href="../../iron-demo-helpers/demo-pages-shared-styles.html">
   <link rel="import" href="../../iron-demo-helpers/demo-snippet.html">
-  <link rel="import" href="../polymer-html5sortable.html">
-  <link rel="import" href="../polymer-html5sortable-script.html">
+  <link rel="import" href="../polymer-sortable.html">
+  <!-- <link rel="import" href="../polymer-html5sortable-script.html"> -->
+  <link rel="import" href="../polymer-html5sortable-script-dev.html">
   <style is="custom-style" include="demo-pages-shared-styles">
   polymer-html5sortable {
     min-height: 1px;
@@ -25,40 +27,63 @@
       <template preserve-content>
         <dom-bind id="demo">
           <template>
+            <style>
+              .ct {
+                display: flex;
+                flex-order: column;
+              }
+              ul {
+                flex: 1;
+              }
+
+              #target {
+                background-color: #ccc;
+              }
+
+              #target.hover {
+                background-color: #234567;
+              }
+            </style>
+            <div class="ct">
             <ul>
-              <polymer-html5sortable connect-with="linked" placeholder="<li>PLACEHOLDER 1</li>">
+              <polymer-sortable id="list" connect-with="linked" placeholder="<li>PLACEHOLDER 1</li>">
                 <template is="dom-repeat" items="{{list}}">
-                  <li>[[item]]
-                    <template is="dom-if" if="[[_lastItem(index, list)]]">
-                      <ul>
-                        <polymer-html5sortable connect-with="linked" placeholder="<li>PLACEHOLDER 3</li>">
-                          <template is="dom-repeat" items="{{list3}}">
-                            <li>[[item]]</li>
-                          </template>
-                        </polymer-html5sortable>
-                      </ul>
-                    </template>
-                  </li>
+                  <li>[[item]]</li>
                 </template>
-              </polymer-html5sortable>
+              </polymer-sortable>
             </ul>
+             <ul>
+                <polymer-sortable id="target" container-class="hover" on-sortenter="onSortenter" accept-from="#list" placeholder="<li>PLACEHOLDER 3</li>">
+                  <template is="dom-repeat" items="{{list3}}">
+                    <li>[[item]]</li>
+                  </template>
+                </polymer-sortable>
+              </ul>
+              </div>
           </template>
           <script>
-          var self = document.querySelector('#demo');
+          const self = document.querySelector('#demo');
           self.list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-          self.list2 = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'];
-          self.list3 = ['carefull'];
+          self.list3 = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'];
+          // self.list3 = ['carefull'];
           self._lastItem = function(index, list) {
             return list.length - 1 === index;
           };
           self.test = function(event) {
             console.log(event);
           }
+
+          self.onSortenter = e => {
+            console.log(e.detail.destination);
+            // e.detail.destination.container.classList.add('hover');
+
+          }
+
           </script>
         </dom-bind>
       </template>
     </demo-snippet>
-    <demo-snippet>
+   <!--  <demo-snippet>
       <template preserve-content>
         <dom-bind id="demo">
           <template>
@@ -75,12 +100,11 @@
               <li>10</li>
             </ul>
             <script>
-            // sortable('.no-poly');
             </script>
           </template>
         </dom-bind>
       </template>
-    </demo-snippet>
+    </demo-snippet> -->
   </div>
 </body>
 
