@@ -5,6 +5,15 @@
   <script>
     (function() {
 
+     function _filter (nodes, selector) {
+        if (!(nodes instanceof NodeList || nodes instanceof HTMLCollection || nodes instanceof Array)) {
+            throw new Error('You must provide a nodeList/HTMLCollection/Array of elements to be filtered.');
+        }
+        if (typeof selector !== 'string') {
+            return Array.from(nodes);
+        }
+        return Array.from(nodes).filter(function (item) { return item.nodeType === 1 && item.matches(selector); });
+    }
     /**
      * ## PolymerSortableBound
      *
@@ -59,7 +68,16 @@
              delegateAdd: {
                type: Boolean,
                value: true
-            }
+            },
+
+            /*
+             * `targetSelectorFilter` selector that will filter nodes on target
+             */
+            targetSelectorFilter: {
+              type: String,
+              value: '*'
+            },
+
         };
       }
       
@@ -71,7 +89,7 @@
 
       swapItem(repeater, index, oldindex, model, event) {
         this._resetRepeaterDom(repeater, index, oldindex);
-        this._translateItems(this.data, index, oldindex);
+        this._translateItems(index, oldindex);
         this.set(`data.${this.get(this.keyPath, model)}.${this.indexPath}`, index);
         this._resetIndex();
         // const items = repeater.items.concat();
@@ -85,27 +103,30 @@
         }, bubbles: true, composed: true}));
       }
 
-      addToRepeater(repeater, index, oldindex, model, event, key) {
-          delete(model[this.keyPath]); 
-          if(!this.data) {
-            this.data = {[key]: model};
-          } else {
-            this.set(`data.${key}`, model);
-          }
-          super.addItem(...arguments);
-          this._translateItems(repeater.items, index, Infinity);
-          this._resetIndex();
-      }
+      // addToRepeater(repeater, index, oldindex, model, event, key) {
+      //     delete(model[this.keyPath]); 
+      //     if(!this.data || Object.keys(this.data).length === 0) {
+      //       this.data = {[key]: model};
+      //     } else {
+      //       this.set(`data.${key}`, model);
+      //     }
+      //     super.addItem(...arguments);
+      //     this._translateItems(repeater.items, index, Infinity);
+      //     this._resetIndex();
+      // }
 
       addItem(repeater, index, oldindex, model, event) {
         const key = this.get(this.keyPath, model);
 
         // Note(cg): when dropping from another repeater adding item should happen
         // while listeneing `sortable-item-add`.
-        if (key || (repeater != this && !this.delegateAdd)) {
-          this.addToRepeater(repeater, index, oldindex, model, event, key);
-        }
+        // if (key && repeater != this && !this.delegateAdd) {
+        // if (key || (repeater != this && !this.delegateAdd)) {
+          // this.addToRepeater(repeater, index, oldindex, model, event, key);
+        // }
+        this._translateItems(index, Infinity);
 
+        // this._resetIndex();
         this.dispatchEvent(new CustomEvent('sortable-item-add', {detail: {
           repeater: repeater,
           delegateAdd: this.delegateAdd,
@@ -113,35 +134,49 @@
           destination: event.detail && event.detail.destination,
           model: model,
           index: index,
-          oldindex: oldindex
+          oldindex: oldindex, 
+          key: key,
         }, bubbles: true, composed: true}));
       }
 
       removeItem(repeater, index, oldindex, model, event, copy) {
-        this.set(`data.${this.get(this.keyPath, model)}`, null);
-        super.removeItem(...arguments);
-        if (!copy) {
-          this._translateItems(repeater.items, Infinity, oldindex);
-          this._resetIndex();
-        }
-        this.dispatchEvent(new CustomEvent('sortable-item-remove', {detail: {
-          repeater: repeater,
-          origin: event.detail && event.detail.origin,
-          destination: event.detail && event.detail.destination,
-          model: model,
-          index: index,
-          oldindex: oldindex,
-          copy: copy
-        }, bubbles: true, composed: true}));
+        return super.removeItem(...arguments)
+          .then( () => {
+            if(copy) {
+              return;
+            }
+            const key = this.get(this.keyPath, model);
+            const startparent = event.detail.origin && event.detail.origin.container;
+            if(startparent && startparent._translateItems) {
+              startparent._translateItems(Infinity, oldindex);
+              startparent._resetIndex();
+            }
+            // Note(cg): is is the repeated dipatching the event as 
+            // it is really where it happens. We still need to remove 
+            // at storage level
+            repeater.dispatchEvent(new CustomEvent('sortable-item-remove', {detail: {
+              repeater: repeater,
+              origin: event.detail && event.detail.origin,
+              destination: event.detail && event.detail.destination,
+              model: model,
+              index: index,
+              oldindex: oldindex,
+              copy: copy,
+              key: key
+            }, bubbles: true, composed: true}));
+          })
       }
 
-      _translateItems(data, index, oldindex) {
+      _translateItems(index, oldindex) {
+        const data = this.data || {};
         Object.keys(data).forEach(key => {
           const item = data[key];
           const itemIndex = this.getIndex(item); // Polymer.Path.get(item, this.indexPath) * 1;
           if (itemIndex >= index && itemIndex < oldindex) {
+            // item[this.indexPath] = itemIndex + 1;
             this.set(`data.${key}.${this.indexPath}`, itemIndex + 1);
           } else if (itemIndex <= index && itemIndex > oldindex) {
+            // item[this.indexPath] = itemIndex - 1;
             this.set(`data.${key}.${this.indexPath}`, itemIndex - 1);
           }
         });
@@ -173,6 +208,11 @@
         const target = parent.children[targetIndex]
         parent.insertBefore(node,target);
 
+      }
+
+      _getNewIndex(parent, item, event) {
+        // The index returned by the event, are not correct because it excludes those which are not selectable
+        return [].indexOf.call(_filter(parent.children, this.targetSelectorFilter), item);
       }
     }
 

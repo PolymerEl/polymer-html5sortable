@@ -1,6 +1,6 @@
 <link rel="import" href="../polymer/polymer.html">
-<link rel="import" href="polymer-html5sortable-script.html">
-<!-- <link rel="import" href="polymer-html5sortable-script-dev.html"> -->
+<!-- <link rel="import" href="polymer-html5sortable-script.html"> -->
+<link rel="import" href="polymer-html5sortable-script-dev.html">
 <link rel="import" href="placeholder-mixin.html">
 <!--
 
@@ -150,6 +150,7 @@ Showing the tree
       display: block;
       min-height: 32px;
     }
+
     </style>
     <slot></slot>
   </template>
@@ -254,14 +255,14 @@ Showing the tree
            * one parent element. For instance it can be used in the context
            * of paper-sublist where sub items should also be sortable
            */
-           getSortable: {
-             type: Function,
-             value: function() {
-                return function(polymerSortable) {
-                  return polymerSortable;
-                };
-             }
-             },
+          getSortable: {
+            type: Function,
+            value: function() {
+              return function(polymerSortable) {
+                return polymerSortable;
+              };
+            }
+          },
 
           /*
            * `avoidDuplicate` true to avoid same model to be adde multiple time under the same list
@@ -304,13 +305,7 @@ Showing the tree
           const repeater = this._getRepeater(this);
           repeater.mutableData = true;
           repeater.addEventListener('dom-change', () => {
-            this._debounceInit = Polymer.Debouncer.debounce(
-               this._debounceInit,
-               Polymer.Async.timeOut.after(100),
-               () => {
-                  this.init();
-                 });
-              
+            this.init()
             // Reloading the sortable every time that dom-repeat changes
           });
           this.addEventListener('sortstart', this._onSortstart);
@@ -327,26 +322,31 @@ Showing the tree
       }
 
       init() {
-        const config = {};
+        this._debounceInit = Polymer.Debouncer.debounce(
+          this._debounceInit,
+          Polymer.Async.timeOut.after(100),
+          () => {
+            const config = {};
 
-        // Adding config
-        ['items', 'handle', 'forcePlaceholderSize', 'acceptFrom', 'copy', 'placeholder', 'hoverClass', 'placeholderClass', 'draggingClass', 'containerClass', 'parentClass']
-        .forEach(key => {
-          const value = this.get(key);
-          if (value !== undefined) {
-            config[key] = value;
-          }
-        });
+            // Adding config
+            ['items', 'handle', 'forcePlaceholderSize', 'acceptFrom', 'copy', 'placeholder', 'hoverClass', 'placeholderClass', 'draggingClass', 'containerClass', 'parentClass']
+            .forEach(key => {
+              const value = this.get(key);
+              if (value !== undefined) {
+                config[key] = value;
+              }
+            });
 
-        let sortables = this.getSortable(this);
-                // if the user provided an element, return it in an array to keep the return value consistant
-        if (sortables instanceof HTMLElement) {
-            sortables = [sortables];
-        }
-        sortables = Array.prototype.slice.call(sortables);
-        // Note(cg): we store this polymer-sortable for each sortable parent. 
-        sortables.forEach(s => s.__sortable = this);
-        this.sortable = sortable(sortables, config);
+            let sortables = this.getSortable(this);
+            // if the user provided an element, return it in an array to keep the return value consistant
+            if (sortables instanceof HTMLElement) {
+              sortables = [sortables];
+            }
+            sortables = Array.prototype.slice.call(sortables);
+            // Note(cg): we store this polymer-sortable for each sortable parent. 
+            sortables.forEach(s => s.__sortable = this);
+            this.sortable = sortable(sortables, config);
+          });
       }
 
       destroy() {
@@ -387,7 +387,7 @@ Showing the tree
 
         // Note(cg): we pass this as event.detail.origin. This is usefull for instance when we have to 
         // fetch draggedModel 
-        if(event.detail.origin) {
+        if (event.detail.origin) {
           event.detail.origin.sortable = this;
         }
         this._dispatch('sort-start', event);
@@ -427,7 +427,7 @@ Showing the tree
         const index = this._getNewIndex(endparent, item, event);
         // const modelIndex =  this._getModelAndIndex(startrepeater, item, event, startparent.copy);
         // const oldindex = modelIndex.index;
-        
+
         const model = startparent.draggedModel;
         const oldindex = startparent.draggedIndex;
         console.info('model', model, oldindex, index);
@@ -442,8 +442,9 @@ Showing the tree
           if (item.parentElement === endparent) {
             endparent.removeChild(item);
           }
+          const removeModel = Object.assign({}, model); // Note(cg): we need to copy the model as key might be altered on addItem.
           this.addItem(endrepeater, index, oldindex, model, event);
-          this.removeItem(startrepeater, index, oldindex, model, event, startparent.copy || (startparent.__sortable && startparent.__sortable.copy));
+          this.removeItem(startrepeater, index, oldindex, removeModel, event, startparent.copy || (startparent.__sortable && startparent.__sortable.copy));
         }
 
         this._dispatch('sort-update', event);
@@ -493,7 +494,7 @@ Showing the tree
         model = this.transformModel(model, event);
         if (model && this._checkDuplicate(repeater, model)) {
           // Note(cg): we add the first item.
-          if (!repeater.items) {
+          if (!repeater.items || !repeater.items.length) {
             model.index = 0;
             repeater.items = [model];
             // repeater.set('items', [model]);
@@ -501,7 +502,7 @@ Showing the tree
           }
           repeater.splice('items', Math.max(index, 0), 0, model);
         }
-        
+
       }
 
       // Note(cg): when startrepeater is `copy`, we can add multiple time the same item.
@@ -512,24 +513,31 @@ Showing the tree
         }
         return true;
       }
+      // function sleep (time) {
+      //      return new Promise((resolve) => setTimeout(resolve, time));
+      //   }
 
       removeItem(repeater, index, oldindex, model, event, copy) {
-        if (copy) {
-          repeater.notifyPath('items');
-          // repeater.items.splice(oldindex, 1);
-        } else {
-          // Note(cg): hack for forcing refresh. As htmlo5sortable is modifing the dom,
-          // we cannot rely on `items` mutation:
-          //   startrepeater.items.splice(oldindex, 1);
-          //   startrepeater.initialCount = Math.max(startrepeater.items.length - 1, 0);
-          //   startrepeater.__render();
-          const items = repeater.items;
-          repeater.items = [];
-          items.splice(items.indexOf(model), 1);
-          Polymer.RenderStatus.afterNextRender(this, () => {
-            repeater.items = items;
-          });
-        }
+        return new Promise((resolve) => {
+          if (copy) {
+            repeater.notifyPath('items');
+            return resolve();
+            // repeater.items.splice(oldindex, 1);
+          } else {
+            // Note(cg): hack for forcing refresh. As htmlo5sortable is modifing the dom,
+            // we cannot rely on `items` mutation:
+            //   startrepeater.items.splice(oldindex, 1);
+            //   startrepeater.initialCount = Math.max(startrepeater.items.length - 1, 0);
+            //   startrepeater.__render();
+            const items = repeater.items;
+            repeater.items = [];
+            items.splice(items.indexOf(model), 1);
+            Polymer.RenderStatus.afterNextRender(this, () => {
+              repeater.items = items;
+              return resolve();
+            });
+          }
+        });
 
       }
 
@@ -564,5 +572,6 @@ Showing the tree
     window.PolymerEl.PolymerSortable = PolymerSortable;
 
   })();
+
   </script>
 </dom-module>
